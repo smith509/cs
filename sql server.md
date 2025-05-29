@@ -116,3 +116,108 @@ ORDER BY
     r.cpu_time DESC;
 ```
 
+# All Tables and Their Statistics
+
+```sql
+SELECT 
+    t.NAME AS TableName,
+    s.Name AS SchemaName,
+    p.rows AS RowCounts,
+    SUM(a.total_pages) * 8 AS TotalSpaceKB,
+    SUM(a.used_pages) * 8 AS UsedSpaceKB,
+    (SUM(a.total_pages) - SUM(a.used_pages)) * 8 AS UnusedSpaceKB
+FROM 
+    sys.tables AS t
+INNER JOIN 
+    sys.schemas AS s ON t.schema_id = s.schema_id
+INNER JOIN 
+    sys.indexes AS i ON t.object_id = i.object_id
+INNER JOIN 
+    sys.partitions AS p ON i.object_id = p.object_id AND i.index_id = p.index_id
+INNER JOIN 
+    sys.allocation_units AS a ON p.partition_id = a.container_id
+WHERE 
+    i.index_id <= 1
+GROUP BY 
+    t.Name, s.Name, p.rows
+ORDER BY 
+    TotalSpaceKB DESC;
+```
+
+# Most Queried Tables
+
+```sql
+SELECT 
+    t.name AS TableName,
+    s.name AS SchemaName,
+    qs.execution_count AS ExecutionCount,
+    qs.total_worker_time AS TotalWorkerTime,
+    qs.total_elapsed_time AS TotalElapsedTime,
+    qs.total_logical_reads AS TotalLogicalReads,
+    qs.total_logical_writes AS TotalLogicalWrites
+FROM 
+    sys.dm_exec_query_stats AS qs
+CROSS APPLY 
+    sys.dm_exec_sql_text(qs.sql_handle) AS st
+JOIN 
+    sys.objects AS t ON st.objectid = t.object_id
+JOIN 
+    sys.schemas AS s ON t.schema_id = s.schema_id
+WHERE 
+    t.type = 'U'  -- Only user tables
+ORDER BY 
+    qs.execution_count DESC;
+```
+
+# All Procs that Begin With "sp_"
+
+```sql
+SELECT 
+    SCHEMA_NAME(schema_id) AS SchemaName,
+    name AS ProcedureName
+FROM 
+    sys.procedures
+WHERE 
+    name LIKE 'sp_%'
+ORDER BY 
+    SchemaName, ProcedureName;
+```
+# Most Executed Procs
+
+```sql
+SELECT 
+    o.name AS ProcedureName,
+    s.name AS SchemaName,
+    qs.execution_count AS ExecutionCount,
+    qs.total_worker_time AS TotalWorkerTime,
+    qs.total_elapsed_time AS TotalElapsedTime,
+    qs.total_logical_reads AS TotalLogicalReads,
+    qs.total_logical_writes AS TotalLogicalWrites
+FROM 
+    sys.dm_exec_query_stats AS qs
+CROSS APPLY 
+    sys.dm_exec_sql_text(qs.sql_handle) AS st
+JOIN 
+    sys.objects AS o ON st.objectid = o.object_id
+JOIN 
+    sys.schemas AS s ON o.schema_id = s.schema_id
+WHERE 
+    o.type = 'P'  -- Only stored procedures
+ORDER BY 
+    qs.execution_count DESC;
+```
+
+# All Funcs
+
+```sql
+SELECT 
+    SCHEMA_NAME(schema_id) AS SchemaName,
+    name AS FunctionName,
+    type_desc AS FunctionType
+FROM 
+    sys.objects
+WHERE 
+    type IN ('FN', 'IF', 'TF')  -- FN: Scalar Function, IF: Inline Table-valued Function, TF: Table-valued Function
+ORDER BY 
+    SchemaName, FunctionName;
+```
